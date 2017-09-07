@@ -54,19 +54,29 @@
       self.pluginLayer.backgroundColor = [UIColor whiteColor];
       self.pluginLayer.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 
-/*
+
       NSArray *subViews = self.viewController.view.subviews;
       UIView *view;
       for (int i = 0; i < [subViews count]; i++) {
           view = [subViews objectAtIndex:i];
           //NSLog(@"remove i=%d class=%@", i, view.class);
+        [self execJS:[NSString stringWithFormat:@"javascript:console.log('remove i=%d class=%@');", i, view.class]];
           [view removeFromSuperview];
           [self.pluginLayer addSubview: view];
       }
       [self.viewController.view addSubview:self.pluginLayer];
-*/
+
     }];
 }
+
+- (void)execJS: (NSString *)jsString {
+  if ([self.webView respondsToSelector:@selector(stringByEvaluatingJavaScriptFromString:)]) {
+    [self.webView performSelector:@selector(stringByEvaluatingJavaScriptFromString:) withObject:jsString];
+  } else if ([self.webView respondsToSelector:@selector(evaluateJavaScript:completionHandler:)]) {
+    [self.webView performSelector:@selector(evaluateJavaScript:completionHandler:) withObject:jsString withObject:nil];
+  }
+}
+
 
 - (void) didRotate:(id)sender
 {}
