@@ -759,7 +759,11 @@ public class PluginMap extends MyPlugin implements OnMarkerClickListener,
       }
     }
 
-    this.onMarkerEvent("info_open", marker);
+    if ((marker.getTag() + "").startsWith("markercluster_")){
+      this.onClusterEvent("info_open", marker);
+    } else {
+      this.onMarkerEvent("info_open", marker);
+    }
 
     // Linear layout
     LinearLayout windowLayer = new LinearLayout(activity);
@@ -966,7 +970,12 @@ public class PluginMap extends MyPlugin implements OnMarkerClickListener,
         if (marker.getTitle() == null && marker.getSnippet() == null) {
 
           syncInfoWndPosition();
-          this.onMarkerEvent("info_open", marker);
+
+          if ((marker.getTag() + "").startsWith("markercluster_")){
+            this.onClusterEvent("info_open", marker);
+          } else {
+            this.onMarkerEvent("info_open", marker);
+          }
 
           int resId = PluginUtil.getAppResource(cordova.getActivity(), "dummy_infowindow", "layout");
           return cordova.getActivity().getLayoutInflater().inflate(resId, null);
@@ -1568,17 +1577,6 @@ public class PluginMap extends MyPlugin implements OnMarkerClickListener,
 
   public void onRequestPermissionResult(int requestCode, String[] permissions,
                                         int[] grantResults) throws JSONException {
-    boolean didPermissionGrant = true;
-    for (int r : grantResults) {
-      if (r == PackageManager.PERMISSION_DENIED) {
-        didPermissionGrant = false;
-        break;
-      }
-    }
-    synchronized (CordovaGoogleMaps.semaphore) {
-      CordovaGoogleMaps.semaphore.put("result_" + requestCode, didPermissionGrant ? "grant" : "denied");
-    }
-
     synchronized (CordovaGoogleMaps.semaphore) {
       CordovaGoogleMaps.semaphore.notify();
     }
@@ -1593,25 +1591,13 @@ public class PluginMap extends MyPlugin implements OnMarkerClickListener,
   public void setMyLocationEnabled(final JSONArray args, final CallbackContext callbackContext) throws JSONException {
 
     // Request geolocation permission.
-    boolean locationPermission = false;
-    try {
-      Method hasPermission = CordovaInterface.class.getDeclaredMethod("hasPermission", String.class);
-
-      String permission = "android.permission.ACCESS_COARSE_LOCATION";
-      locationPermission = (Boolean) hasPermission.invoke(cordova, permission);
-    } catch (Exception e) {
-      e.printStackTrace();
-      PluginResult result;
-      result = new PluginResult(PluginResult.Status.ILLEGAL_ACCESS_EXCEPTION);
-      callbackContext.sendPluginResult(result);
-      return;
-    }
+    boolean locationPermission = cordova.hasPermission("android.permission.ACCESS_COARSE_LOCATION");
     Log.d(TAG, "---> setMyLocationEnabled, hasPermission =  " + locationPermission);
 
     if (!locationPermission) {
       //_saveArgs = args;
       //_saveCallbackContext = callbackContext;
-      mapCtrl.requestPermissions(this, callbackContext.hashCode(), new String[]{"android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_COARSE_LOCATION"});
+      cordova.requestPermissions(this, callbackContext.hashCode(), new String[]{"android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_COARSE_LOCATION"});
       synchronized (CordovaGoogleMaps.semaphore) {
         try {
           CordovaGoogleMaps.semaphore.wait();
@@ -1619,9 +1605,7 @@ public class PluginMap extends MyPlugin implements OnMarkerClickListener,
           e.printStackTrace();
         }
       }
-      locationPermission = "grant".equals(CordovaGoogleMaps.semaphore.remove("result_" + callbackContext.hashCode()));
-
-      if (!locationPermission) {
+      if (!cordova.hasPermission("android.permission.ACCESS_COARSE_LOCATION")) {
         callbackContext.error("Geolocation permission request was denied.");
         return;
       }
@@ -2012,13 +1996,15 @@ public class PluginMap extends MyPlugin implements OnMarkerClickListener,
     if (clusterId_markerId.contains("markercluster_")) {
       if (clusterId_markerId.contains("-marker_")) {
         activeMarker = marker;
+        this.onClusterEvent("marker_click", activeMarker);
       } else {
         if (activeMarker != null) {
-          this.onClusterEvent("info_close", activeMarker);
+          this.onMarkerEvent("info_close", activeMarker);
         }
       }
       this.onClusterEvent("cluster_click", marker);
     } else {
+      webView.loadUrl("javascript:if(window.cordova){cordova.fireDocumentEvent('plugin_touch', {});}");
       this.onMarkerEvent("marker_click", marker);
       activeMarker = marker;
     }
@@ -2061,7 +2047,12 @@ public class PluginMap extends MyPlugin implements OnMarkerClickListener,
   public void onInfoWindowClick(Marker marker) {
     activeMarker = marker;
     syncInfoWndPosition();
-    this.onMarkerEvent("info_click", marker);
+    String markerTag = marker.getTag() + "";
+    if (markerTag.startsWith("markercluster_")){
+      this.onClusterEvent("info_click", marker);
+    } else {
+      this.onMarkerEvent("info_click", marker);
+    }
   }
 
   @Override
@@ -2069,7 +2060,11 @@ public class PluginMap extends MyPlugin implements OnMarkerClickListener,
     if (marker.equals(activeMarker)) {
       syncInfoWndPosition();
     }
-    this.onMarkerEvent("marker_drag", marker);
+    if ((marker.getTag() + "").startsWith("markercluster_")){
+      this.onClusterEvent("marker_drag", marker);
+    } else {
+      this.onMarkerEvent("marker_drag", marker);
+    }
   }
 
   @Override
@@ -2077,7 +2072,11 @@ public class PluginMap extends MyPlugin implements OnMarkerClickListener,
     if (marker.equals(activeMarker)) {
       syncInfoWndPosition();
     }
-    this.onMarkerEvent("marker_drag_end", marker);
+    if ((marker.getTag() + "").startsWith("markercluster_")){
+      this.onClusterEvent("marker_drag_end", marker);
+    } else {
+      this.onMarkerEvent("marker_drag_end", marker);
+    }
   }
 
   @Override
@@ -2085,14 +2084,22 @@ public class PluginMap extends MyPlugin implements OnMarkerClickListener,
     if (marker.equals(activeMarker)) {
       syncInfoWndPosition();
     }
-    this.onMarkerEvent("marker_drag_start", marker);
+    if ((marker.getTag() + "").startsWith("markercluster_")){
+      this.onClusterEvent("marker_drag_start", marker);
+    } else {
+      this.onMarkerEvent("marker_drag_start", marker);
+    }
   }
 
   @Override
   public void onInfoWindowLongClick(Marker marker) {
     activeMarker = marker;
     syncInfoWndPosition();
-    this.onMarkerEvent("info_long_click", marker);
+    if ((marker.getTag() + "").startsWith("markercluster_")){
+      this.onClusterEvent("info_long_click", marker);
+    } else {
+      this.onMarkerEvent("info_long_click", marker);
+    }
   }
 
   @Override
@@ -2100,7 +2107,14 @@ public class PluginMap extends MyPlugin implements OnMarkerClickListener,
     boolean useHtmlInfoWnd = marker.getTitle() == null &&
                              marker.getSnippet() == null;
     if (useHtmlInfoWnd) {
-      this.onMarkerEvent("info_close", marker);
+      String markerTag = marker.getTag() + "";
+      if (markerTag.startsWith("markercluster_")){
+        if (markerTag.contains("-marker_")) {
+          this.onClusterEvent("info_close", marker);
+        }
+      } else {
+        this.onMarkerEvent("info_close", marker);
+      }
     }
     //activeMarker = null; // <-- This causes HTMLinfoWindow is not able to close when you tap on the map.
   }
@@ -2583,8 +2597,11 @@ public class PluginMap extends MyPlugin implements OnMarkerClickListener,
             //Log.d(TAG, "---> onMapClick : " + activeMarker);
             if (activeMarker != null) {
               //Log.d(TAG, "---> activeMarker.getTag() : " + activeMarker.getTag());
-              if ((activeMarker.getTag() + "").contains("markercluster")) {
-                onClusterEvent("info_close", activeMarker);
+              String markerTag = activeMarker.getTag() + "";
+              if (markerTag.contains("markercluster")) {
+                if (markerTag.contains("-marker_")) {
+                  onClusterEvent("info_close", activeMarker);
+                }
               } else {
                 onInfoWindowClose(activeMarker);
               }
