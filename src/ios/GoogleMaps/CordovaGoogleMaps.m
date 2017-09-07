@@ -64,29 +64,11 @@
           [self.pluginLayer addSubview: view];
       }
       [self.viewController.view addSubview:self.pluginLayer];
-
     }];
 }
 
 - (void) didRotate:(id)sender
-{
-
-  NSArray *keys = [self.pluginMaps allKeys];
-  NSString *key;
-  PluginMap *pluginMap;
-  for (int i = 0; i < keys.count; i++) {
-    key = [keys objectAtIndex:i];
-    if ([self.pluginMaps objectForKey:key]) {
-      pluginMap = [self.pluginMaps objectForKey:key];
-      if (pluginMap.mapCtrl.map) {
-         // Trigger the CAMERA_MOVE_END mandatory
-        [pluginMap.mapCtrl mapView:pluginMap.mapCtrl.map idleAtCameraPosition:pluginMap.mapCtrl.map.camera];
-      }
-    }
-  }
-
-}
-
+{}
 
 -(void)viewDidLayoutSubviews {
     [self.pluginLayer.pluginScrollView setContentSize: self.webView.scrollView.contentSize];
@@ -171,10 +153,6 @@
  * Intialize the map
  */
 - (void)getMap:(CDVInvokedUrlCommand *)command {
-    if (self.pluginLayer != nil) {
-      self.pluginLayer.isSuspended = false;
-      self.pluginLayer.pauseResize = false;
-    }
 
     dispatch_async(dispatch_get_main_queue(), ^{
 
@@ -295,7 +273,7 @@
                                           bearing: bearing
                                           viewingAngle: angle];
 
-        mapCtrl.map = [GMSMapView mapWithFrame:rect camera:camera];
+        pluginMap.mapCtrl.map = [GMSMapView mapWithFrame:rect camera:camera];
 
         //mapType
         NSString *typeStr = [initOptions valueForKey:@"mapType"];
@@ -327,9 +305,9 @@
 
         //indoor display
         pluginMap.mapCtrl.map.indoorDisplay.delegate = mapCtrl;
-        [mapCtrl.view addSubview:mapCtrl.map];
-        [self.pluginLayer addMapView:mapCtrl];
+        [mapCtrl.view addSubview:pluginMap.mapCtrl.map];
 
+        [self.pluginLayer addMapView:mapCtrl];
 
         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
             [pluginMap getMap:command];
@@ -404,7 +382,7 @@
         [self.locationManager startUpdatingLocation];
         [self.locationCommandQueue addObject:command];
 
-        //CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+        //CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_NO_RESULT];
         //[pluginResult setKeepCallbackAsBool:YES];
         //[self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
     }
