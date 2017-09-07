@@ -97,6 +97,7 @@ public class CordovaGoogleMaps extends CordovaPlugin implements ViewTreeObserver
     cordova.getActivity().runOnUiThread(new Runnable() {
       @SuppressLint("NewApi")
       public void run() {
+        CURRENT_URL = webView.getUrl();
 
         // Enable this, webView makes draw cache on the Android action bar issue.
         //View view = webView.getView();
@@ -245,12 +246,14 @@ public class CordovaGoogleMaps extends CordovaPlugin implements ViewTreeObserver
   @Override
   public boolean onOverrideUrlLoading(String url) {
     mPluginLayout.isSuspended = true;
+    /*
     this.activity.runOnUiThread(new Runnable() {
       @Override
       public void run() {
         webView.loadUrl("javascript:if(window.cordova){cordova.fireDocumentEvent('plugin_url_changed', {});}");
       }
     });
+    */
     CURRENT_URL = url;
     return false;
   }
@@ -330,32 +333,8 @@ public class CordovaGoogleMaps extends CordovaPlugin implements ViewTreeObserver
   }
 
 
-  public void requestPermissions(CordovaPlugin plugin, int requestCode, String[] permissions) {
-
-    try {
-      Method requestPermission = CordovaInterface.class.getDeclaredMethod(
-          "requestPermissions", CordovaPlugin.class, int.class, String[].class);
-
-      // If there is no exception, then this is cordova-android 5.0.0+
-      requestPermission.invoke(plugin.cordova, plugin, requestCode, permissions);
-    } catch (Exception e) {
-      e.printStackTrace();
-    }
-  }
-
   public void onRequestPermissionResult(int requestCode, String[] permissions,
                                         int[] grantResults) throws JSONException {
-    boolean didPermissionGrant = true;
-    for (int r : grantResults) {
-      if (r == PackageManager.PERMISSION_DENIED) {
-        didPermissionGrant = false;
-        break;
-      }
-    }
-    synchronized (semaphore) {
-      semaphore.put("result_" + requestCode, didPermissionGrant ? "grant" : "denied");
-    }
-
     synchronized (CordovaGoogleMaps.semaphore) {
       semaphore.notify();
     }
@@ -419,32 +398,20 @@ public class CordovaGoogleMaps extends CordovaPlugin implements ViewTreeObserver
     final boolean isHigh = isHighLocal;
 
     // Request geolocation permission.
-    boolean locationPermission;
-    try {
-      Method hasPermission = CordovaInterface.class.getDeclaredMethod("hasPermission", String.class);
+    boolean locationPermission = cordova.hasPermission("android.permission.ACCESS_COARSE_LOCATION");
 
-      String permission = "android.permission.ACCESS_COARSE_LOCATION";
-      locationPermission = (Boolean) hasPermission.invoke(cordova, permission);
-    } catch (Exception e) {
-      PluginResult result;
-      result = new PluginResult(PluginResult.Status.ILLEGAL_ACCESS_EXCEPTION);
-      callbackContext.sendPluginResult(result);
-      return;
-    }
-
-    Log.d(TAG, "---> getMyLocation, hasPermission =  " + locationPermission);
     if (!locationPermission) {
       //_saveArgs = args;
       //_saveCallbackContext = callbackContext;
-      requestPermissions(CordovaGoogleMaps.this, callbackContext.hashCode(), new String[]{"android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_COARSE_LOCATION"});
       synchronized (semaphore) {
+        cordova.requestPermissions(this, callbackContext.hashCode(), new String[]{"android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_COARSE_LOCATION"});
         try {
           semaphore.wait();
         } catch (InterruptedException e) {
           e.printStackTrace();
         }
       }
-      locationPermission = "grant".equals(CordovaGoogleMaps.semaphore.remove("result_" + callbackContext.hashCode()));
+      locationPermission = cordova.hasPermission("android.permission.ACCESS_COARSE_LOCATION");
 
       if (!locationPermission) {
         callbackContext.error("Geolocation permission request was denied.");
@@ -914,6 +881,19 @@ public class CordovaGoogleMaps extends CordovaPlugin implements ViewTreeObserver
   @Override
   public void onResume(boolean multitasking) {
     super.onResume(multitasking);
+    if (mPluginLayout != null) {
+      mPluginLayout.isSuspended = false;
+
+      if (mPluginLayout.pluginMaps.size() > 0) {
+        this.activity.runOnUiThread(new Runnable() {
+          @Override
+          public void run() {
+            CURRENT_URL = webView.getUrl();
+            webView.loadUrl("javascript:if(window.cordova){cordova.fireDocumentEvent('plugin_touch', {});}");
+          }
+        });
+      }
+    }
 
     cordova.getThreadPool().submit(new Runnable() {
       @Override
@@ -963,7 +943,7 @@ public class CordovaGoogleMaps extends CordovaPlugin implements ViewTreeObserver
     callbackContext.sendPluginResult(pluginResult);
   }
 
-  /**
+ /**
    * Called by the system when the device configuration changes while your activity is running.
    *
    * @param newConfig		The new device configuration
@@ -980,9 +960,11 @@ public class CordovaGoogleMaps extends CordovaPlugin implements ViewTreeObserver
         for (PluginEntry entry: collection) {
           if ("plugin.google.maps.PluginMap".equals(entry.pluginClass) && entry.plugin != null) {
             pluginMap = (PluginMap)entry.plugin;
+            if (pluginMap.map != null) {
 
-            // Trigger the CAMERA_MOVE_END mandatory
-            pluginMap.onCameraIdle();
+              // Trigger the CAMERA_MOVE_END mandatory
+              pluginMap.onCameraIdle();
+            }
           }
         }
       }
