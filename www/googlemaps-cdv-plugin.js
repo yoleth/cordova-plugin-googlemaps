@@ -59,9 +59,9 @@ if (!cordova) {
         viewportTag = document.createElement("meta");
         viewportTag.setAttribute('name', 'viewport');
     }
-    
+
     var viewportTagContent = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no';
-    
+
     // Detect if iOS device
     if (/(iPhone|iPod|iPad)/i.test(window.navigator.userAgent)) {
       // Get iOS major version
@@ -72,7 +72,7 @@ if (!cordova) {
         viewportTagContent += ', viewport-fit=cover';
       }
     }
-    
+
     // Update viewport tag attribute
     viewportTag.setAttribute('content', viewportTagContent);
   })();
@@ -277,10 +277,10 @@ if (!cordova) {
           }
         }
         if (!doNotTrace && element.nodeType === Node.ELEMENT_NODE) {
-          if (element.childNodes.length > 0) {
+          if (element.children.length > 0) {
             var child;
-            for (var i = 0; i < element.childNodes.length; i++) {
-              child = element.childNodes[i];
+            for (var i = 0; i < element.children.length; i++) {
+              child = element.children[i];
               if (child.nodeType !== Node.ELEMENT_NODE ||
                 doNotTraceTags.indexOf(child.tagName.toLowerCase()) > -1 ||
                 common.getStyle(child, "display") === "none") {
@@ -331,34 +331,75 @@ if (!cordova) {
 
       // If the map div is not displayed (such as display='none'),
       // ignore the map temporally.
+      var minMapDepth = 9999999;
       mapIDs.forEach(function(mapId) {
         var div = MAPS[mapId].getDiv();
         if (div) {
           var elemId = div.getAttribute("__pluginDomId");
-          if (elemId && !(elemId in domPositions)) {
-
-            // Is the map div removed?
-            if (window.document.querySelector) {
-              var ele = document.querySelector("[__pluginDomId='" + elemId + "']");
-              if (!ele) {
-                // If no div element, remove the map.
-                MAPS[mapId].remove();
+          if (elemId) {
+            if (elemId in domPositions) {
+              minMapDepth = Math.min(minMapDepth, domPositions[elemId].depth);
+            } else {
+              // Is the map div removed?
+              if (window.document.querySelector) {
+                var ele = document.querySelector("[__pluginDomId='" + elemId + "']");
+                if (!ele) {
+                  // If no div element, remove the map.
+                  MAPS[mapId].remove();
+                }
               }
-            }
 
-            domPositions[elemId] = {
-              size: {
-                top: 10000,
-                left: 0,
-                width: 100,
-                height: 100
-              },
-              depth: 0
-            };
+              domPositions[elemId] = {
+                size: {
+                  top: 10000,
+                  left: 0,
+                  width: 100,
+                  height: 100
+                },
+                depth: 0
+              };
+            }
           }
         }
       });
 
+      //-----------------------------------------------------------------
+      // Ignore the elements that their z-index is smaller than map div
+      //-----------------------------------------------------------------
+      var quickfilter = function(list, head, tail) {
+        var i = head, j = tail;
+        var leftRight = true;
+        while(i < j) {
+          if (leftRight) {
+            if (domPositions[list[j]].depth < minMapDepth) {
+              list[i] = list[j];
+              i++;
+              leftRight = false;
+            } else {
+              j--;
+            }
+          } else {
+            if (domPositions[list[i]].depth >= minMapDepth) {
+              list[j] = list[i];
+              j--;
+              leftRight = true;
+            } else {
+              i++;
+            }
+          }
+        }
+        list.splice(0, j);
+      };
+      var list = Object.keys(domPositions);
+      quickfilter(list, 0, list.length - 1);
+      var finalDomPositions = {};
+      list.forEach(function(domId) {
+        finalDomPositions[domId] = domPositions[domId];
+      });
+
+      //-----------------------------------------------------------------
+      // Pass information to native
+      //-----------------------------------------------------------------
       cordova_exec(function() {
         prevDomPositions = domPositions;
         mapIDs.forEach(function(mapId) {
@@ -368,7 +409,7 @@ if (!cordova) {
         });
         setTimeout(putHtmlElements, 50);
         isChecking = false;
-      }, null, 'CordovaGoogleMaps', 'putHtmlElements', [domPositions]);
+      }, null, 'CordovaGoogleMaps', 'putHtmlElements', [finalDomPositions]);
       child = null;
       parentNode = null;
       elemId = null;
@@ -416,25 +457,58 @@ if (!cordova) {
     document.addEventListener("plugin_touch", resetTimer);
     window.addEventListener("orientationchange", resetTimer);
 
-    function onBackButton() {
+    //----------------------------------------------------
+    // Stop all executions if the page will be closed.
+    //----------------------------------------------------
+    function stopExecution() {
       // Request stop all tasks.
       _stopRequested = true;
+/*
       if (_isWaitMethod && _executingCnt > 0) {
         // Wait until all tasks currently running are stopped.
         setTimeout(arguments.callee, 100);
         return;
       }
-      // Executes the browser back history action
-      // Since the cordova can not exit from app sometimes, handle the backbutton action in CordovaGoogleMaps
-      cordova_exec(null, null, 'CordovaGoogleMaps', "backHistory", []);
+*/
+    }
+    window.addEventListener("unload", stopExecution);
 
-      if (cordova) {
-        resetTimer();
-        // For other plugins, fire the `plugin_buckbutton` event instead of the `backbutton` evnet.
-        cordova.fireDocumentEvent('plugin_backbutton', {});
+    //--------------------------------------------
+    // Hook the backbutton of Android action
+    //--------------------------------------------
+    var anotherBackbuttonHandler = null;
+    function onBackButton() {
+      cordova.fireDocumentEvent('plugin_touch', {});
+      if (anotherBackbuttonHandler) {
+        anotherBackbuttonHandler();
+      } else {
+        cordova_exec(null, null, 'CordovaGoogleMaps', 'backHistory', []);
       }
     }
-    document.addEventListener("backbutton", onBackButton, false);
+    document.addEventListener("backbutton", onBackButton);
+
+    var _org_addEventListener = document.addEventListener;
+    var _org_removeEventListener = document.removeEventListener;
+    document.addEventListener = function(eventName, callback) {
+      var args = Array.prototype.slice.call(arguments, 0);
+      if (eventName.toLowerCase() !== "backbutton") {
+        _org_addEventListener.apply(this, args);
+        return;
+      }
+      if (!anotherBackbuttonHandler) {
+        anotherBackbuttonHandler = callback;
+      }
+    };
+    document.removeEventListener = function(eventName, callback) {
+      var args = Array.prototype.slice.call(arguments, 0);
+      if (eventName.toLowerCase() !== "backbutton") {
+        _org_removeEventListener.apply(this, args);
+        return;
+      }
+      if (anotherBackbuttonHandler === callback) {
+        anotherBackbuttonHandler = null;
+      }
+    };
 
   }());
 
