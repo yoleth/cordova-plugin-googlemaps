@@ -54,7 +54,7 @@
       self.pluginLayer.backgroundColor = [UIColor whiteColor];
       self.pluginLayer.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 
-
+/*
       NSArray *subViews = self.viewController.view.subviews;
       UIView *view;
       for (int i = 0; i < [subViews count]; i++) {
@@ -64,6 +64,7 @@
           [self.pluginLayer addSubview: view];
       }
       [self.viewController.view addSubview:self.pluginLayer];
+*/
     }];
 }
 
