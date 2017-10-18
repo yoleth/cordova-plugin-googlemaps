@@ -1065,7 +1065,7 @@ Map.prototype.addMarkerCluster = function(markerClusterOptions, callback) {
       "boundsDraw": common.defaultTrueOption(markerClusterOptions.boundsDraw)
     }, exec);
     markerCluster.one("remove", function() {
-      delete self.OVERLAYS[result.id];
+      //delete self.OVERLAYS[result.id];
 /*
       result.geocellList.forEach(function(geocell, idx) {
         var markerOptions = markerClusterOptions.markers[idx];
